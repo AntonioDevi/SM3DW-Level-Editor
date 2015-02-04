@@ -1,0 +1,520 @@
+
+"""
+Copyright (C) 2015 Yannik Marchand
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY Yannik Marchand ''AS IS'' AND ANY
+EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL Yannik Marchand BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The views and conclusions contained in the software and documentation 
+are those of the authors and should not be interpreted as representing
+official policies, either expressed or implied, of Yannik Marchand.
+"""
+
+from OpenGL.GL import *
+from OpenGL.GLU import *
+from PyQt4 import QtGui, QtCore
+from PyQt4.QtOpenGL import *
+import os, sys
+
+import byml, fmdl, sarc, yaz0
+
+import datetime
+now = datetime.datetime.now
+
+color = 1
+
+def isfloat(text):
+    try:
+        float(text)
+        return 1
+    except ValueError:
+        return 0
+
+class YFloatEdit(QtGui.QLineEdit):
+    def __init__(self,val,callback):
+        QtGui.QLineEdit.__init__(self,str(val))
+        self.callback = callback
+        self.textChanged[str].connect(self.changed)
+        self.prev = str(val)
+
+    def changed(self,text):
+        if (isfloat(text) or not text) and not ' ' in text:
+            self.prev = text
+            if text:
+                self.callback()
+        else:
+            self.setText(self.prev)
+
+class SettingsWidget(QtGui.QWidget):
+    def __init__(self,parent):
+        QtGui.QWidget.__init__(self,parent)
+        layout = QtGui.QVBoxLayout(self)
+        scroll = QtGui.QScrollArea()
+        scroll.setWidgetResizable(True)
+        layout.addWidget(scroll)
+
+        scrollContents = QtGui.QWidget()
+        self.layout = QtGui.QVBoxLayout(scrollContents)
+        self.layout.setAlignment(QtCore.Qt.AlignTop)
+        scroll.setWidget(scrollContents)
+
+    def reset(self):
+        for i in reversed(range(self.layout.count())):
+            self.layout.itemAt(i).widget().setParent(None)
+
+    def showSettings(self,obj):
+        self.current = obj
+        lbl = QtGui.QLabel(obj.data['UnitConfigName'])
+        lbl.setStyleSheet('font-size: 16px')
+        self.layout.addWidget(lbl)
+
+        lbl = QtGui.QLabel('Translate:')
+        lbl.setStyleSheet('font-size: 14px')
+        self.layout.addWidget(lbl)
+        self.transx = YFloatEdit(obj.posx,self.changed)
+        self.transy = YFloatEdit(obj.posy,self.changed)
+        self.transz = YFloatEdit(obj.posz,self.changed)
+        self.layout.addWidget(self.transx)
+        self.layout.addWidget(self.transy)
+        self.layout.addWidget(self.transz)
+
+        lbl = QtGui.QLabel('Rotate:')
+        lbl.setStyleSheet('font-size: 14px')
+        self.layout.addWidget(lbl)
+        self.rotx = YFloatEdit(obj.rotx,self.changed)
+        self.roty = YFloatEdit(obj.roty,self.changed)
+        self.rotz = YFloatEdit(obj.rotz,self.changed)
+        self.layout.addWidget(self.rotx)
+        self.layout.addWidget(self.roty)
+        self.layout.addWidget(self.rotz)
+
+        for key in obj.data.subNodes():
+            if not key in ['Scale','Translate','Rotate','UnitConfig','Links','UnitConfigName','ModelName',
+                           'Comment','IsLinkDest','LayerConfigName','CubeMapUnitName','ModelSuffix']:
+                lbl = QtGui.QLabel(key+':')
+                box = QtGui.QLineEdit(str(obj.data[key]))
+                self.layout.addWidget(lbl)
+                self.layout.addWidget(box)
+
+    def changed(self):
+        if self.transx.text() and self.transy.text() and self.transz.text():
+            self.current.posx = float(self.transx.text())
+            self.current.posy = float(self.transy.text())
+            self.current.posz = float(self.transz.text())
+            self.current.rotx = float(self.rotx.text())
+            self.current.roty = float(self.roty.text())
+            self.current.rotz = float(self.rotz.text())
+            self.current.saveValues()
+            window.glWidget.updateGL()
+
+class LevelObject:
+    def __init__(self,obj,dlist):
+        global color
+        self.data = obj
+        self.color = (color/100/10.0,((color/10)%10)/10.0,(color%10)/10.0)
+        color+=1
+        self.list = dlist
+        
+        trans = obj['Translate']
+        self.posx = trans['X']/100
+        self.posy = trans['Y']/100
+        self.posz = trans['Z']/100
+
+        rot = obj['Rotate']
+        self.rotx = rot['X']
+        self.roty = rot['Y']
+        self.rotz = rot['Z']
+
+    def saveValues(self):
+        obj = self.data
+        trans = obj['Translate']
+        if self.posx != trans['X']/100:
+            trans.getSubNode('X').changeValue(self.posx*100)
+        if self.posy != trans['Y']/100:
+            trans.getSubNode('Y').changeValue(self.posy*100)
+        if self.posz != trans['Z']/100:
+            trans.getSubNode('Z').changeValue(self.posz*100)
+            
+        rot = obj['Rotate']
+        if self.rotx != rot['X']:
+            rot.getSubNode('X').changeValue(self.rotx)
+        if self.roty != rot['Y']:
+            rot.getSubNode('Y').changeValue(self.roty)
+        if self.rotz != rot['Z']:
+            rot.getSubNode('Z').changeValue(self.rotz)
+
+    def draw(self,pick):
+        if pick:
+            glColor3f(*self.color)
+        glPushMatrix()
+        glTranslatef(self.posx,self.posy,self.posz)
+        glRotatef(self.rotx,1.0,0.0,0.0)
+        glRotatef(self.roty,0.0,1.0,0.0)
+        glRotatef(self.rotz,0.0,0.0,1.0)
+        glCallList(self.list)
+        glPopMatrix()
+
+class LevelWidget(QGLWidget):
+
+    objects = []
+    cache = {}
+    rotx = roty = rotz = 0
+    posx = posy = 0
+    posz = -300
+    picked = None
+    
+    def __init__(self,parent):
+        QGLWidget.__init__(self,parent)
+
+    def reset(self):
+        self.objects = []
+        self.rotx = self.roty = self.rotz = 0
+        self.posx = self.posy =  0
+        self.posz = -300
+
+    def mousePressEvent(self,event):
+        if event.button() == 1:
+            self.pickObjects(event.x(),event.y())
+
+    def pickObjects(self,x,y):
+        self.paintGL(1)
+        pixel = glReadPixels(x,self.height()-y,1,1,GL_RGB,GL_UNSIGNED_BYTE)
+        r,g,b = [round(ord(pixel[i])/255.0,1) for i in range(3)]
+        self.picked = None
+        window.settings.reset()
+        for obj in self.objects:
+            if obj.color == (r,g,b):
+                self.picked = obj
+                break
+        if self.picked:
+            window.settings.showSettings(self.picked)
+
+    def paintGL(self,pick=0):
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glLoadIdentity()
+        glTranslatef(self.posx,self.posy,self.posz)
+        glRotatef(self.rotx,1.0,0.0,0.0)
+        glRotatef(self.roty,0.0,1.0,0.0)
+        glRotatef(self.rotz,0.0,0.0,1.0)
+        for obj in self.objects:
+            glColor3f(1.0,1.0,1.0)
+            obj.draw(pick)
+
+    def resizeGL(self,w,h):
+        if h == 0:
+            h = 1
+            
+        glViewport(0,0,w,h)
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluPerspective(45.0,float(w)/float(h),0.1,750.0)
+        glMatrixMode(GL_MODELVIEW)
+
+    def initializeGL(self):
+        glClearColor(0.3,0.3,1.0,0.0)
+        glDepthFunc(GL_LEQUAL)
+        glEnable(GL_DEPTH_TEST)
+        self.generateCubeList()
+
+    def addObject(self,obj,modelName):
+        if not modelName in self.cache:
+            self.cache[modelName] = self.loadModel(modelName)
+        lobj = LevelObject(obj,self.cache[modelName])
+        self.objects.append(lobj)
+
+    def loadModel(self,name):
+        if not os.path.isfile(window.gamePath+'/ObjectData/'+name+'.szs'):
+            return self.cubeList
+
+        with open(window.gamePath+'/ObjectData/'+name+'.szs','rb') as f:
+            data = f.read()
+
+        sarchive = yaz0.decompress(data)
+        if sarc.contains(sarchive,name+'.bfres'):
+            bfres = sarc.extract(sarchive,name+'.bfres')
+            model = fmdl.parse(bfres)
+            return self.generateList(model)
+        return self.cubeList
+
+    def generateList(self,model,):
+        vertices = model['Vertices']
+        triangles = model['Triangles']
+        displayList = glGenLists(1)
+        glNewList(displayList,GL_COMPILE)
+
+        glBegin(GL_TRIANGLES)
+        for triangle in triangles:
+            for vertex in triangle:
+                glVertex3f(*[vertices[vertex][i]/100 for i in range(3)])
+        glEnd()
+        glColor3f(0.0,0.0,0.0)
+        for triangle in triangles:
+            glBegin(GL_LINES)
+            for vertex in triangle:
+                glVertex3f(*[vertices[vertex][i]/100 for i in range(3)])
+            glEnd()
+        
+        glEndList()
+        return displayList
+
+    def generateCubeList(self):
+        displayList = glGenLists(1)
+        glNewList(displayList,GL_COMPILE)
+
+        glBegin(GL_QUADS)
+        self.drawCube()
+        glEnd()
+
+        glBegin(GL_LINES)
+        glColor3f(0.0,0.0,0.0)
+        self.drawCube()
+        glEnd()
+
+        glEndList()
+
+        self.cubeList = displayList
+
+    def drawCube(self):
+        glVertex3f( 0.5, 0.5,-0.5)
+        glVertex3f(-0.5, 0.5,-0.5)
+        glVertex3f(-0.5, 0.5, 0.5)
+        glVertex3f( 0.5, 0.5, 0.5)
+
+        glVertex3f( 0.5,-0.5, 0.5)
+        glVertex3f(-0.5,-0.5, 0.5)
+        glVertex3f(-0.5,-0.5,-0.5)
+        glVertex3f( 0.5,-0.5,-0.5)
+        
+        glVertex3f( 0.5, 0.5, 0.5)
+        glVertex3f(-0.5, 0.5, 0.5)
+        glVertex3f(-0.5,-0.5, 0.5)
+        glVertex3f( 0.5,-0.5, 0.5)
+
+        glVertex3f( 0.5,-0.5,-0.5)
+        glVertex3f(-0.5,-0.5,-0.5)
+        glVertex3f(-0.5, 0.5,-0.5)
+        glVertex3f( 0.5, 0.5,-0.5)
+        
+        glVertex3f(-0.5, 0.5, 0.5)
+        glVertex3f(-0.5, 0.5,-0.5)
+        glVertex3f(-0.5,-0.5,-0.5)
+        glVertex3f(-0.5,-0.5, 0.5)
+        
+        glVertex3f( 0.5, 0.5,-0.5)
+        glVertex3f( 0.5, 0.5, 0.5)
+        glVertex3f( 0.5,-0.5, 0.5)
+        glVertex3f( 0.5,-0.5,-0.5)
+
+class ChooseLevelDialog(QtGui.QDialog):
+    def __init__(self,worldList):
+        QtGui.QDialog.__init__(self)
+        self.setWindowTitle('Choose Level')
+        self.currentLevel = None
+
+        tree = QtGui.QTreeWidget()
+        tree.setHeaderHidden(True)
+        tree.currentItemChanged.connect(self.handleItemChange)
+        tree.itemActivated.connect(self.handleItemActivated)
+        
+        nodes = []
+        for world in worldList['WorldList'].subNodes():
+            worldNode = QtGui.QTreeWidgetItem()
+            worldNode.setText(0,'World '+str(world['WorldId']))
+            for level in world['StageList'].subNodes():
+                levelNode = QtGui.QTreeWidgetItem()
+                levelNode.setData(0,QtCore.Qt.UserRole,level['StageName'])
+                levelNode.setText(0,'Level '+str(level['CourseId'])+' ('+level['StageName']+')')
+                worldNode.addChild(levelNode)
+            nodes.append(worldNode)
+        tree.addTopLevelItems(nodes)
+
+        self.buttonBox = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok|QtGui.QDialogButtonBox.Cancel)
+        self.buttonBox.button(QtGui.QDialogButtonBox.Ok).setEnabled(False)
+
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        layout = QtGui.QVBoxLayout()
+        layout.addWidget(tree)
+        layout.addWidget(self.buttonBox)
+        self.setLayout(layout)
+
+        self.setMinimumWidth(340)
+        self.setMinimumHeight(384)
+
+    def handleItemChange(self,current,previous):
+        self.currentLevel = current.data(0,QtCore.Qt.UserRole).toString()
+        if not self.currentLevel:
+            self.buttonBox.button(QtGui.QDialogButtonBox.Ok).setEnabled(False)
+        else:
+            self.buttonBox.button(QtGui.QDialogButtonBox.Ok).setEnabled(True)
+
+    def handleItemActivated(self,item,column):
+        self.currentLevel = item.data(0,QtCore.Qt.UserRole).toString()
+        if self.currentLevel:
+            self.accept()
+
+class MainWindow(QtGui.QMainWindow):
+    def __init__(self):
+        QtGui.QMainWindow.__init__(self)
+        self.setWindowTitle("Super Mario 3D World")
+        self.setGeometry(100,100,1080,720)
+
+        self.setupMenu()
+        
+        self.qsettings = QtCore.QSettings("Kinnay","SM3DW Editor")
+        self.gamePath = self.qsettings.value('gamePath').toPyObject()
+        if not self.isValidGameFolder(self.gamePath):
+            self.changeGamePath(True)
+
+        self.loadStageList()
+        self.levelSelect = ChooseLevelDialog(self.worldList)
+        
+        self.settings = SettingsWidget(self)
+        self.setupGLScene()
+        self.resizeWidgets()
+
+        self.show()
+
+    def changeGamePath(self,disable=False):
+        path = self.askGamePath()
+        if path:
+            self.qsettings.setValue('gamePath',path)
+        else:
+            if disable:
+                self.openAction.setEnabled(False)
+            QtGui.QMessageBox.warning(self,"Incomplete Folder","The folder you chose doesn't seem to contain the required files.")
+
+    def askGamePath(self):
+        QtGui.QMessageBox.information(self,'Game Path',"You're now going to be asked to pick a folder. Choose the folder that contains at least the StageData, ObjectData and SystemData folders of SM3DW. You can change this later in the settings menu.")
+        folder = QtGui.QFileDialog.getExistingDirectory(self,"Choose Game Path")
+        if not self.isValidGameFolder(folder):
+            return None
+        return folder
+
+    def isValidGameFolder(self,folder):
+        if not folder: return 0
+        if not os.path.exists(folder+'\StageData'): return 0
+        if not os.path.exists(folder+'\ObjectData'): return 0
+        if not os.path.exists(folder+'\SystemData'): return 0
+        if not os.path.isfile(folder+'\SystemData\StageList.szs'): return 0
+        return 1
+
+    def loadStageList(self):
+        with open(self.gamePath+'/SystemData/StageList.szs','rb') as f:
+            data = f.read()
+
+        self.worldList = byml.BYML(sarc.extract(yaz0.decompress(data),'StageList.byml')).rootNode
+
+    def showLevelDialog(self):
+        if self.levelSelect.exec_():
+            with open(self.gamePath+'/StageData/'+self.levelSelect.currentLevel+'Map1.szs','rb') as f:
+                data = f.read()
+            self.levelData = byml.BYML(sarc.extract(yaz0.decompress(data),self.levelSelect.currentLevel+'Map.byml'))
+            self.loadLevel(self.levelData.rootNode)
+
+    def loadLevel(self,levelData):
+        stime = now()
+        self.glWidget.reset()
+        self.settings.reset()
+        amount = len(levelData['ObjectList'])
+        progress = QtGui.QProgressDialog(self)
+        progress.setCancelButton(None)
+        progress.setMinimumDuration(0)
+        progress.setRange(0,amount)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.setWindowTitle('Loading...')
+        i = 0
+        for obj in levelData['ObjectList'].subNodes():
+            progress.setLabelText('Loading object '+str(i+1)+'/'+str(amount))
+            progress.setValue(i)
+            self.loadObject(obj)
+            self.glWidget.updateGL()
+            i+=1
+        progress.setValue(i)
+        self.saveAction.setEnabled(True)
+        print now()-stime
+
+    def loadObject(self,obj):
+        modelName = obj['ModelName'] if obj['ModelName'] else obj['UnitConfigName']
+        self.glWidget.addObject(obj,modelName)
+
+    def setupMenu(self):
+        self.openAction = QtGui.QAction("Open",self)
+        self.openAction.setShortcut("Ctrl+O")
+        self.openAction.triggered.connect(self.showLevelDialog)
+
+        self.saveAction = QtGui.QAction("Save",self)
+        self.saveAction.setShortcut("Ctrl+S")
+        self.saveAction.triggered.connect(self.saveLevel)
+        self.saveAction.setEnabled(False)
+
+        pathAction = QtGui.QAction("Change Game Path",self)
+        pathAction.setShortcut("Ctrl+G")
+        pathAction.triggered.connect(self.changeGamePath)
+        
+        self.menubar = self.menuBar()
+        fileMenu = self.menubar.addMenu("File")
+        fileMenu.addAction(self.openAction)
+        fileMenu.addAction(self.saveAction)
+        settingsMenu = self.menubar.addMenu("Settings")
+        settingsMenu.addAction(pathAction)
+
+    def saveLevel(self):
+        fn = QtGui.QFileDialog.getSaveFileName(self,'Save Level','StageData','Unpacked Levels (*.byml)')
+        with open(fn,'wb') as f:
+            f.write(self.levelData.data)
+
+    def setupGLScene(self):
+        self.glWidget = LevelWidget(self)
+        self.glWidget.show()
+
+    def resizeWidgets(self):
+        self.glWidget.setGeometry(220,21,self.width(),self.height()-21)
+        self.settings.setGeometry(0,21,220,self.height()-21)
+
+    def resizeEvent(self,event):
+        self.resizeWidgets()
+
+    def keyPressEvent(self,event):
+        key = event.key()
+        if key == ord('I'): self.glWidget.rotx+=1
+        elif key == ord('K'): self.glWidget.rotx-=1
+        elif key == ord('O'): self.glWidget.roty+=1
+        elif key == ord('L'): self.glWidget.roty-=1
+        elif key == ord('P'): self.glWidget.rotz+=1
+        elif key == ord(';'): self.glWidget.rotz-=1
+        elif key == ord('A'): self.glWidget.posx-=1
+        elif key == ord('D'): self.glWidget.posx+=1
+        elif key == ord('S'): self.glWidget.posy-=1
+        elif key == ord('W'): self.glWidget.posy+=1
+        elif key == ord('Q'): self.glWidget.posz-=1
+        elif key == ord('E'): self.glWidget.posz+=1
+        elif key == ord('M'): self.glWidget.picked.posx+=1
+        self.glWidget.updateGL()
+
+def main():
+    global window
+    app = QtGui.QApplication(sys.argv)
+    window = MainWindow()
+    sys.exit(app.exec_())
+
+if __name__ == '__main__':
+    main()
