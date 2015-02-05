@@ -58,7 +58,7 @@ class YFloatEdit(QtGui.QLineEdit):
         if (isfloat(text) or not text) and not ' ' in text:
             self.prev = text
             if text:
-                self.callback()
+                self.callback(self)
         else:
             self.setText(self.prev)
 
@@ -109,11 +109,15 @@ class SettingsWidget(QtGui.QWidget):
             if not key in ['Scale','Translate','Rotate','UnitConfig','Links','UnitConfigName','ModelName',
                            'Comment','IsLinkDest','LayerConfigName','CubeMapUnitName','ModelSuffix']:
                 lbl = QtGui.QLabel(key+':')
-                box = QtGui.QLineEdit(str(obj.data[key]))
+                if isinstance(obj.data.getSubNode(key),byml.FloatNode):
+                    box = YFloatEdit(obj.data[key],self.changed2)
+                    box.node = obj.data.getSubNode(key)
+                else:
+                    box = QtGui.QLineEdit(str(obj.data[key]))
                 self.layout.addWidget(lbl)
                 self.layout.addWidget(box)
 
-    def changed(self):
+    def changed(self,box):
         if self.transx.text() and self.transy.text() and self.transz.text():
             self.current.posx = float(self.transx.text())
             self.current.posy = float(self.transy.text())
@@ -123,6 +127,10 @@ class SettingsWidget(QtGui.QWidget):
             self.current.rotz = float(self.rotz.text())
             self.current.saveValues()
             window.glWidget.updateGL()
+
+    def changed2(self,box):
+        if box.text():
+            box.node.changeValue(float(box.text()))
 
 class LevelObject:
     def __init__(self,obj,dlist):
@@ -507,7 +515,6 @@ class MainWindow(QtGui.QMainWindow):
         elif key == ord('W'): self.glWidget.posy+=1
         elif key == ord('Q'): self.glWidget.posz-=1
         elif key == ord('E'): self.glWidget.posz+=1
-        elif key == ord('M'): self.glWidget.picked.posx+=1
         self.glWidget.updateGL()
 
 def main():
