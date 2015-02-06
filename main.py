@@ -47,20 +47,34 @@ def isfloat(text):
     except ValueError:
         return 0
 
-class YFloatEdit(QtGui.QLineEdit):
-    def __init__(self,val,callback):
+def isint(text):
+    try:
+        int(text)
+        return 1
+    except ValueError:
+        return 0
+
+class YLineEdit(QtGui.QLineEdit):
+    def __init__(self,val,callback,func):
         QtGui.QLineEdit.__init__(self,str(val))
         self.callback = callback
         self.textChanged[str].connect(self.changed)
         self.prev = str(val)
+        self.test = func
 
     def changed(self,text):
-        if (isfloat(text) or not text) and not ' ' in text:
+        if (self.test(text) or not text) and not ' ' in text:
             self.prev = text
             if text:
                 self.callback(self)
         else:
             self.setText(self.prev)
+
+def YFloatEdit(v,cb):
+    return YLineEdit(v,cb,isfloat)
+
+def YIntEdit(v,cb):
+    return YLineEdit(v,cb,isint)
 
 class SettingsWidget(QtGui.QWidget):
     def __init__(self,parent):
@@ -109,9 +123,13 @@ class SettingsWidget(QtGui.QWidget):
             if not key in ['Scale','Translate','Rotate','UnitConfig','Links','UnitConfigName','ModelName',
                            'Comment','IsLinkDest','LayerConfigName','CubeMapUnitName','ModelSuffix']:
                 lbl = QtGui.QLabel(key+':')
-                if isinstance(obj.data.getSubNode(key),byml.FloatNode):
+                vnode = obj.data.getSubNode(key)
+                if isinstance(vnode,byml.FloatNode):
                     box = YFloatEdit(obj.data[key],self.changed2)
-                    box.node = obj.data.getSubNode(key)
+                    box.node = vnode
+                elif isinstance(vnode,byml.IntegerNode):
+                    box = YIntEdit(obj.data[key],self.changed2)
+                    box.node = vnode
                 else:
                     box = QtGui.QLineEdit(str(obj.data[key]))
                 self.layout.addWidget(lbl)
@@ -130,7 +148,7 @@ class SettingsWidget(QtGui.QWidget):
 
     def changed2(self,box):
         if box.text():
-            box.node.changeValue(float(box.text()))
+            box.node.changeValue(box.text())
 
 class LevelObject:
     def __init__(self,obj,dlist):

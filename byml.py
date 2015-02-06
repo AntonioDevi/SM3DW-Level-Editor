@@ -61,11 +61,13 @@ class BooleanNode(ValueNode):
     pass
 
 class IntegerNode(ValueNode):
-    pass
+    def changeValue(self,val):
+        self.val = int(val)
+        self.byml.data = self.byml.data[:self.offs]+struct.pack('>i',self.val)+self.byml.data[self.offs+4:]
 
 class FloatNode(ValueNode):
     def changeValue(self,val):
-        self.val = val
+        self.val = float(val)
         self.byml.data = self.byml.data[:self.offs]+struct.pack('>f',self.val)+self.byml.data[self.offs+4:]
 
 class NoneNode(StringNode):
