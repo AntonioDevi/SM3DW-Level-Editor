@@ -1,5 +1,5 @@
 # SM3DW-Level-Editor
-This is what may become a nice level editor in the future, but at the moment, it can only move and rotate objects.
+This is what may become a nice level editor in the future, but at the moment, it can only move and rotate objects and change some of their settings.
 
 Controls are:
     I,K: Rotate X

@@ -58,7 +58,10 @@ class StringNode(ValueNode):
     pass
 
 class BooleanNode(ValueNode):
-    pass
+    def changeValue(self,val):
+        self.val = bool(val)
+        bchar = '\x01' if self.val else '\x00'
+        self.byml.data = self.byml.data[:self.offs]+bchar+self.byml.data[self.offs+1:]
 
 class IntegerNode(ValueNode):
     def changeValue(self,val):

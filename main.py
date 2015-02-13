@@ -54,6 +54,16 @@ def isint(text):
     except ValueError:
         return 0
 
+class YCheckBox(QtGui.QCheckBox):
+    def __init__(self,node):
+        QtGui.QCheckBox.__init__(self)
+        self.stateChanged.connect(self.changed)
+        self.node = node
+
+    def changed(self,state):
+        print state == QtCore.Qt.Checked
+        self.node.changeValue(state==QtCore.Qt.Checked)
+
 class YLineEdit(QtGui.QLineEdit):
     def __init__(self,val,callback,func):
         QtGui.QLineEdit.__init__(self,str(val))
@@ -130,6 +140,10 @@ class SettingsWidget(QtGui.QWidget):
                 elif isinstance(vnode,byml.IntegerNode):
                     box = YIntEdit(obj.data[key],self.changed2)
                     box.node = vnode
+                elif isinstance(vnode,byml.BooleanNode):
+                    box = YCheckBox(vnode)
+                    if obj.data[key]:
+                        box.toggle()
                 else:
                     box = QtGui.QLineEdit(str(obj.data[key]))
                 self.layout.addWidget(lbl)
