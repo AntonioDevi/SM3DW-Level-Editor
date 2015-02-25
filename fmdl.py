@@ -27,39 +27,26 @@ are those of the authors and should not be interpreted as representing
 official policies, either expressed or implied, of Yannik Marchand.
 """
 
-import struct
+import struct, math
 
-bytepos = -1
-def char():
-    global bytepos
-    bytepos+=1
-    return content[bytepos]
-
-def chars(n):
+def String(offs):
     s = ''
-    for i in range(n):
-        s+=char()
+    while data[offs] != '\x00':
+        s+=data[offs]
+        offs+=1
     return s
 
-def String():
-    s = ''
-    c = char()
-    while c != '\x00':
-        s+=c
-        c = char()
-    return s
+def UI8(offs):
+    return ord(data[offs])
 
-def UI8():
-    return ord(char())
+def UI16(offs):
+    return struct.unpack_from('>H',data,offs)[0]
 
-def UI16():
-    return (UI8()<<8)+UI8()
+def UI24(offs):
+    return struct.unpack('>I','\x00'+data[offs:offs+3])[0]
 
-def UI24():
-    return (UI16()<<8)+UI8()
-
-def UI32():
-    return (UI16()<<16)+UI16()
+def UI32(offs):
+    return struct.unpack_from('>I',data,offs)[0]
 
 ## The following HalfToFloat function was made by this guy here:
 ##   http://forums.devshed.com/python-programming-11/converting-half-precision-floating-hexidecimal-decimal-576842.html
@@ -91,152 +78,156 @@ def HalfToFloat(h):
 def float16(data):
     floats = []
     for i in range(3):
-        v = struct.unpack('>H',data[i*2:i*2+2])[0]
+        v = struct.unpack_from('>H',data,i*2)[0]
         x = HalfToFloat(v)
         str = struct.pack('I',x)
         f = struct.unpack('f',str)[0]
         floats.append(f)
     return floats
 
-def parse(data):
-    global content,bytepos
-    content = data
-    
-    mdlstart = content.index('FMDL')
-    bytepos = mdlstart-1
-    assert chars(4) == 'FMDL'
-    chars(12)
-    vtxoffs = bytepos+UI32()
-    shpoffs = bytepos+UI32()
-    chars(8)
-    vtxcount = UI16()
-    shpcount = UI16()
+class FSKL:
+    def parse(self,offs):
+        self.scale = struct.unpack_from('>fff',data,offs+20)
+        self.rot = [math.degrees(r) for r in struct.unpack_from('>fff',data,offs+32)]
+        self.trans = struct.unpack_from('>fff',data,offs+48)
+        #print self.scale,self.rot,self.trans
 
-    bytepos = vtxoffs
-    vertices = []
-    for i in range(vtxcount):
-        assert chars(4) == 'FVTX'
-        attrnum = UI8()
-        buffnum = UI8()
-        UI16()
-        vertnum = UI32()
-        chars(4)
-        attroff = bytepos+UI32()
-        chars(4)
-        buffoff = bytepos+UI32()
-        chars(4)
-        vertices.append([attrnum,buffnum,vertnum,attroff,buffoff,i])
+class FVTX:
+    def parse(self,offs):
+        assert data[offs:offs+4] == 'FVTX'
+        attrnum = UI8(offs+4)
+        buffnum = UI8(offs+5)
+        vertnum = UI32(offs+8)
+        attroff = offs+16+UI32(offs+16)
+        buffoff = offs+24+UI32(offs+24)
 
-    vbuffers = []
-    for vertarr in vertices:
-        bytepos = vertarr[4]
-        buffers = []
-        for i in range(vertarr[1]):
-            chars(4)
-            size = UI32()
-            chars(4)
-            stride = UI16()
-            chars(6)
-            dataoff = bytepos+UI32()
-            
-            bp = bytepos
-            bytepos = dataoff
-            buffer = chars(size)
-            bytepos = bp
-            
+        self.parseBuffers(buffoff,buffnum,vertnum)
+        self.parsePolygons(attroff,attrnum)
+
+    def parseBuffers(self,offs,bnum,vnum):
+        self.buffers = []
+        for i in range(bnum):
+            size = UI32(offs+4)
+            stride = UI16(offs+12)
+            dataoff = offs+20+UI32(offs+20)
+            buffer = data[dataoff:dataoff+size]
             elements = []
-            for i in range(vertarr[2]):
-                elements.append(buffer[stride*i:stride*(i+1)])
-            buffers.append(elements)
-        vbuffers.append(buffers)
+            for j in range(vnum):
+                elements.append(buffer[stride*j:stride*(j+1)])
+            self.buffers.append(elements)
+            offs+=24
 
-    polygons = []
-    for vertarr in vertices:
-        bytepos = vertarr[3]
-        buffarr = vbuffers[vertarr[5]]
-        blarg2 = []
-        for i in range(vertarr[0]):
-            nameoff = bytepos+UI32()
-            buffidx = UI8()
-            buffoff = UI24()
-            format = UI32()
+    def parsePolygons(self,offs,num):
+        self.polygons = []
+        self.indices = []
+        self.weights = []
+        self.transform = False
+        for i in range(num):
+            nameoff = offs+UI32(offs)
+            buffidx = UI8(offs+4)
+            buffoff = UI24(offs+5)
+            format = UI32(offs+8)
+            name = String(nameoff)
             
-            bp = bytepos
-            bytepos = nameoff
-            name = String()
-            bytepos = bp
-            
-            blarg3 = []
-            if name == '_p0':
-                elements = buffarr[buffidx]
+            if name == '_i0' and format == 0x100:
+                self.transform = True
+
+            elif name in ['_p0','_i0','_w0']:
+                attributes = []
+                elements = self.buffers[buffidx]
                 for element in elements:
                     if format == 0x811:
-                        blarg3.append(struct.unpack('>fff',element[buffoff:buffoff+12]))
+                        attributes.append(struct.unpack_from('>fff',element,buffoff))
                     elif format == 0x80F:
-                        blarg3.append(float16(element[buffoff:buffoff+6]))
+                        attributes.append(float16(element[buffoff:buffoff+6]))
+                    elif format == 0x104:
+                        attributes.append(struct.unpack_from('BB',element,buffoff))
+                    elif format == 0x4:
+                        attributes.append([ord(c)/255.0 for c in element[buffoff:buffoff+2]])
+                    elif format == 0x10A:
+                        attributes.append(struct.unpack_from('BBBB',element,buffoff))
+                    elif format == 0xA:
+                        attributes.append([ord(c)/255.0 for c in element[buffoff:buffoff+4]])
                     else:
                         raise ValueError,"Unsupported buffer format "+hex(format)
-                blarg2.append(blarg3)
-        polygons.append(blarg2)
+                if name == '_p0': self.polygons.append(attributes)
+                elif name == '_i0': self.indices.append(attributes)
+                elif name == '_w0': self.weights.append(attributes)
+            offs+=12
 
-    bytepos = shpoffs
-    length = UI32()
-    num = UI32()+1
-    assert num == shpcount+1
-    shpgroup = []
-    for i in range(num):
-        chars(12)
-        pdata = bytepos+UI32()
-        shpgroup.append(pdata)
+class FMDL:
+    def parse(self,offs):
+        skloffs = offs+12+UI32(offs+12)
+        vtxoffs = offs+16+UI32(offs+16)
+        shpoffs = offs+20+UI32(offs+20)
+        vtxcount = UI16(offs+32)
+        shpcount = UI16(offs+34)
 
-    indexlists = []
-    for i in shpgroup[1:]:
-        bytepos = i
-        assert chars(4) == 'FSHP'
-        nameoffs = bytepos+UI32()
-        
-        bytepos = nameoffs
-        name = String()
-        
-        bytepos = i+8
-        chars(4)
-        sectionidx = UI16()
-        chars(22)
-        bytepos+=UI32()
-        chars(12)
-        vgcount = UI16()
-        chars(2)
-        vgoffs = bytepos+UI32()
-        idxoffs = bytepos+UI32()
-        
-        bytepos = idxoffs
-        chars(4)
-        size = UI32()
-        chars(12)
-        bytepos += UI32()
-        indexbuffer = chars(size)
+        self.parseBones(skloffs)
+        self.parseVertices(vtxoffs,vtxcount)
+        self.parseShapes(shpoffs,shpcount)
 
-        indices = []
-        for j in range(size/2):
-            index = (ord(indexbuffer[j*2])<<8)+ord(indexbuffer[j*2+1])
-            indices.append(index)
-        indexlists.append(indices)
+    def parseBones(self,offs):
+        self.bones = []
+        assert data[offs:offs+4] == 'FSKL'
+        bonecount = UI16(offs+8)
+        boneoffs = offs+20+UI32(offs+20)
+        for i in range(bonecount):
+            bone = FSKL()
+            bone.parse(boneoffs+i*0x40)
+            self.bones.append(bone)
 
-    model = {
-        'Vertices': [],
-        'Triangles': []
-        }
+    def parseVertices(self,offs,count):
+        self.vertices = []
+        for i in range(count):
+            vertex = FVTX()
+            vertex.parse(offs+i*32)
+            self.vertices.append(vertex)
 
-    for i in range(len(indexlists)):
-        polygon = polygons[i][0]
-        for vertex in polygon:
-            model['Vertices'].append([vertex[0],vertex[1],vertex[2]])
+    def parseShapes(self,offs,count):
+        self.shapes = []
+        num = UI32(offs+4)
+        assert num == count
+        offs+=36
+        for i in range(num):
+            shape = FSHP(self.bones,self.vertices,i)
+            shape.parse(offs+UI32(offs))
+            self.shapes.append(shape)
+            offs+=16
 
-    n = 0
-    for i in range(len(indexlists)):
-        l = indexlists[i]
-        for j in range(len(l)/3):
-            model['Triangles'].append([l[j*3]+n,l[j*3+1]+n,l[j*3+2]+n])
-        n+=len(polygons[i][0])
+class FSHP:
+    def __init__(self,bones,vertices,x):
+        fvtx = vertices[x]
+        self.vertices = fvtx.polygons[0]
+        self.transform = fvtx.transform
+        self.bones = bones
 
-    return model
+    def parse(self,offs):
+        assert data[offs:offs+4] == 'FSHP'
+        sectionidx = UI16(offs+12)
+
+        mdloffs = offs+36+UI32(offs+36)
+        idxoffs = mdloffs+20+UI32(mdloffs+20)
+        size = UI32(idxoffs+4)
+        buffoff = idxoffs+20+UI32(idxoffs+20)
+        indexbuffer = data[buffoff:buffoff+size]
+
+        self.indices = []
+        for i in range(0,size,2):
+            index = struct.unpack_from('>H',indexbuffer,i)[0]
+            self.indices.append(index)
+
+        if self.transform:
+            skloffs = offs+0x28+UI32(offs+0x28)
+            bone = self.bones[UI16(skloffs)]
+            self.rotation = bone.rot
+        else:
+            self.rotation = (0,0,0)
+
+def parse(content):
+    global data,bytepos
+    data = content
+    mdlstart = data.index('FMDL')
+    mdl = FMDL()
+    mdl.parse(mdlstart)
+    return mdl

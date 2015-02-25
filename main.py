@@ -61,7 +61,6 @@ class YCheckBox(QtGui.QCheckBox):
         self.node = node
 
     def changed(self,state):
-        print state == QtCore.Qt.Checked
         self.node.changeValue(state==QtCore.Qt.Checked)
 
 class YLineEdit(QtGui.QLineEdit):
@@ -130,7 +129,7 @@ class SettingsWidget(QtGui.QWidget):
         self.layout.addWidget(self.rotz)
 
         for key in obj.data.subNodes():
-            if not key in ['Scale','Translate','Rotate','UnitConfig','Links','UnitConfigName','ModelName',
+            if not key in ['Scale','Translate','Rotate','UnitConfig','Links','UnitConfigName',
                            'Comment','IsLinkDest','LayerConfigName','CubeMapUnitName','ModelSuffix']:
                 lbl = QtGui.QLabel(key+':')
                 vnode = obj.data.getSubNode(key)
@@ -293,23 +292,36 @@ class LevelWidget(QGLWidget):
             return self.generateList(model)
         return self.cubeList
 
-    def generateList(self,model,):
-        vertices = model['Vertices']
-        triangles = model['Triangles']
+    def generateList(self,model):
         displayList = glGenLists(1)
         glNewList(displayList,GL_COMPILE)
 
-        glBegin(GL_TRIANGLES)
-        for triangle in triangles:
-            for vertex in triangle:
-                glVertex3f(*[vertices[vertex][i]/100 for i in range(3)])
-        glEnd()
-        glColor3f(0.0,0.0,0.0)
-        for triangle in triangles:
-            glBegin(GL_LINES)
-            for vertex in triangle:
+        for polygon in model.shapes:
+
+            rotation = polygon.rotation
+            triangles = polygon.indices
+            vertices = polygon.vertices
+            
+            glPushMatrix()
+            glRotatef(rotation[0],1.0,0.0,0.0)
+            glRotatef(rotation[1],0.0,1.0,0.0)
+            glRotatef(rotation[2],0.0,0.0,1.0)
+
+            glBegin(GL_TRIANGLES)
+            for vertex in triangles:
                 glVertex3f(*[vertices[vertex][i]/100 for i in range(3)])
             glEnd()
+
+            glPushAttrib(GL_CURRENT_BIT)
+            glColor3f(0.0,0.0,0.0)
+            for triangle in [triangles[i*3:i*3+3] for i in range(len(triangles)/3)]:
+                glBegin(GL_LINES)
+                for vertex in triangle:
+                    glVertex3f(*[vertices[vertex][i]/100 for i in range(3)])
+                glEnd()
+            glPopAttrib()
+
+            glPopMatrix()
         
         glEndList()
         return displayList
