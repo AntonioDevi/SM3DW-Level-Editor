@@ -132,7 +132,7 @@ class SettingsWidget(QtGui.QWidget):
         self.layout.addWidget(self.rotz)
 
         for key in obj.data.subNodes():
-            if not key in ['Scale','Translate','Rotate','UnitConfig','Links','UnitConfigName',
+            if not key in ['Scale','Translate','Rotate','ModelName','UnitConfig','Links','UnitConfigName',
                            'Comment','IsLinkDest','LayerConfigName','CubeMapUnitName','ModelSuffix']:
                 lbl = QtGui.QLabel(key+':')
                 vnode = obj.data.getSubNode(key)
@@ -251,6 +251,7 @@ class LevelWidget(QGLWidget):
                 break
         if self.picked:
             window.settings.showSettings(self.picked)
+        self.updateGL()
 
     def paintGL(self,pick=0):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -260,7 +261,10 @@ class LevelWidget(QGLWidget):
         glRotatef(self.roty,0.0,1.0,0.0)
         glRotatef(self.rotz,0.0,0.0,1.0)
         for obj in self.objects:
-            glColor3f(1.0,1.0,1.0)
+            if obj == self.picked:
+                glColor3f(1.0,0.0,0.0)
+            else:
+                glColor3f(1.0,1.0,1.0)
             obj.draw(pick)
 
     def resizeGL(self,w,h):
