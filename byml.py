@@ -40,7 +40,7 @@ def UI24(data,offs):
     return struct.unpack('>I','\x00'+data[offs:offs+3])[0]
 
 def UI32(data,offs):
-    return struct.unpack('>I',data[offs:offs+4])[0]
+    return struct.unpack_from('>I',data,offs)[0]
 
 class ValueNode:
     def __init__(self,v,offs,byml):
@@ -55,7 +55,9 @@ class ValueNode:
         pass
 
 class StringNode(ValueNode):
-    pass
+    def changeValue(self,val):
+        self.val = val
+        self.byml.stringChanged(self)
 
 class BooleanNode(ValueNode):
     def changeValue(self,val):
@@ -73,7 +75,7 @@ class FloatNode(ValueNode):
         self.val = float(val)
         self.byml.data = self.byml.data[:self.offs]+struct.pack('>f',self.val)+self.byml.data[self.offs+4:]
 
-class NoneNode(StringNode):
+class NoneNode(ValueNode):
     pass
 
 class DictNode:
@@ -199,14 +201,15 @@ class BYML:
     def __init__(self,data):
         self.data = data
         assert data[:2] == 'BY'
-        offs1 = UI32(data,4)
-        offs2 = UI32(data,8)
-        offs3 = UI32(data,12)
+        self.offs1 = UI32(data,4)
+        self.offs2 = UI32(data,8)
+        self.offs3 = UI32(data,12)
         self.nodes = []
         self.strings = []
-        self.doStringTable(offs1,self.nodes)
-        self.doStringTable(offs2,self.strings)
-        self.rootNode = self.getRootNode(offs3)
+        self.doStringTable(self.offs1,self.nodes)
+        self.stringEnd = self.doStringTable(self.offs2,self.strings)
+        self.stringUpdates = []
+        self.rootNode = self.getRootNode(self.offs3)
         self.rootNode.parse()
 
     def doStringTable(self,offs,l):
@@ -217,6 +220,7 @@ class BYML:
         for i in range(count):
             l.append(String(self.data,soffs+UI32(self.data,offs)))
             offs+=4
+        return offs
 
     def getRootNode(self,offs):
         type = ord(self.data[offs])
@@ -227,3 +231,21 @@ class BYML:
         else:
             raise ValueError,'Unknown Section Type: '+hex(type)
         return node
+
+    def stringChanged(self,node):
+        if not node in self.stringUpdates:
+            self.stringUpdates.append(node)
+
+    def saveChanges(self):
+        for node in self.stringUpdates:
+            if node.val not in self.strings:
+                self.strings.append(node.val)
+                self.offs3 += 4
+                self.data = self.data[:self.stringEnd]+struct.pack('>I',len(self.data))+self.data[self.stringEnd:]
+                self.data += node.val+'\x00'
+            self.data = self.data[:node.offs]+struct.pack('>I',self.strings.index(node.val))+self.data[node.offs+4:]
+
+        self.data = self.data[:12]+struct.pack('>I',self.offs3)+self.data[16:]
+        self.data = self.data[:self.offs2+1]+struct.pack('>I',len(self.strings))[1:]+self.data[self.offs2+4:]
+
+        self.stringUpdates = []

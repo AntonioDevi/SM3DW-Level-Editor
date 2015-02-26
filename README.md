@@ -1,5 +1,5 @@
 # SM3DW-Level-Editor
-This is what may become a nice level editor in the future, but at the moment, it can only move and rotate objects and change some of their settings.
+This is a nice little level editor I made. At the moment, it can only move and rotate objects and change their settings. Adding/deleting objects may be added in the future. It can only save edited levels as byml files, you'll have to repack and compress them yourself. Since I can't test edits on a Wii U, some things might be broken.
 
 Controls are:<br>
 I,K: Rotate X<br>

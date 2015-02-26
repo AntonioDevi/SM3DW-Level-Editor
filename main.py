@@ -43,16 +43,19 @@ color = 1
 def isfloat(text):
     try:
         float(text)
-        return 1
+        return not ' ' in text
     except ValueError:
         return 0
 
 def isint(text):
     try:
         int(text)
-        return 1
+        return not ' ' in text
     except ValueError:
         return 0
+
+def isstr(text):
+    return True
 
 class YCheckBox(QtGui.QCheckBox):
     def __init__(self,node):
@@ -72,7 +75,7 @@ class YLineEdit(QtGui.QLineEdit):
         self.test = func
 
     def changed(self,text):
-        if (self.test(text) or not text) and not ' ' in text:
+        if self.test(text) or not text:
             self.prev = text
             if text:
                 self.callback(self)
@@ -143,8 +146,12 @@ class SettingsWidget(QtGui.QWidget):
                     box = YCheckBox(vnode)
                     if obj.data[key]:
                         box.toggle()
+                elif isinstance(vnode,byml.StringNode):
+                    box = YLineEdit(str(obj.data[key]),self.changed2,isstr)
+                    box.node = vnode
                 else:
                     box = QtGui.QLineEdit(str(obj.data[key]))
+                    box.setEnabled(False)
                 self.layout.addWidget(lbl)
                 self.layout.addWidget(box)
 
@@ -532,6 +539,7 @@ class MainWindow(QtGui.QMainWindow):
     def saveLevel(self):
         fn = QtGui.QFileDialog.getSaveFileName(self,'Save Level','StageData','Unpacked Levels (*.byml)')
         with open(fn,'wb') as f:
+            self.levelData.saveChanges()
             f.write(self.levelData.data)
 
     def setupGLScene(self):
