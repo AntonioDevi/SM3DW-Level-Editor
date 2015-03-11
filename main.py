@@ -107,9 +107,9 @@ class SettingsWidget(QtGui.QWidget):
 
     def showSettings(self,obj):
         self.current = obj
-        lbl = QtGui.QLabel(obj.data['UnitConfigName'])
-        lbl.setStyleSheet('font-size: 16px')
-        self.layout.addWidget(lbl)
+        self.config_lbl = QtGui.QLabel(obj.data['UnitConfigName'])
+        self.config_lbl.setStyleSheet('font-size: 16px')
+        self.layout.addWidget(self.config_lbl)
 
         lbl = QtGui.QLabel('Translate:')
         lbl.setStyleSheet('font-size: 14px')
@@ -131,11 +131,21 @@ class SettingsWidget(QtGui.QWidget):
         self.layout.addWidget(self.roty)
         self.layout.addWidget(self.rotz)
 
+        lbl = QtGui.QLabel('Scale:')
+        lbl.setStyleSheet('font-size: 14px')
+        self.layout.addWidget(lbl)
+        self.sclx = YFloatEdit(obj.sclx,self.changed)
+        self.scly = YFloatEdit(obj.scly,self.changed)
+        self.sclz = YFloatEdit(obj.sclz,self.changed)
+        self.layout.addWidget(self.sclx)
+        self.layout.addWidget(self.scly)
+        self.layout.addWidget(self.sclz)
+
         for key in obj.data.subNodes():
-            if not key in ['Scale','Translate','Rotate','ModelName','UnitConfig','Links','UnitConfigName',
-                           'Comment','IsLinkDest','LayerConfigName','CubeMapUnitName','ModelSuffix']:
+            vnode = obj.data.getSubNode(key)
+            if not key in ['Scale','Translate','Rotate','UnitConfig','Links','UnitConfigName',
+                           'IsLinkDest','ModelSuffix','ModelName']:
                 lbl = QtGui.QLabel(key+':')
-                vnode = obj.data.getSubNode(key)
                 if isinstance(vnode,byml.FloatNode):
                     box = YFloatEdit(obj.data[key],self.changed2)
                     box.node = vnode
@@ -154,21 +164,55 @@ class SettingsWidget(QtGui.QWidget):
                     box.setEnabled(False)
                 self.layout.addWidget(lbl)
                 self.layout.addWidget(box)
+                
+            elif key == 'UnitConfigName':
+                lbl = QtGui.QLabel(key+':')
+                #box = YLineEdit(str(obj.data['UnitConfigName']),self.configNameChanged,isstr)
+                #box.node = vnode
+                box = QtGui.QLineEdit(str(obj.data[key]))
+                box.setEnabled(False)
+                self.layout.addWidget(lbl)
+                self.layout.addWidget(box)
+                
+            elif key == 'ModelName':
+                lbl = QtGui.QLabel(key+':')
+                if isinstance(vnode,byml.StringNode):
+                    box = YLineEdit(str(obj.data['ModelName']),self.modelNameChanged,isstr)
+                    box.node = vnode
+                else:
+                    box = QtGui.QLineEdit(str(obj.data['ModelName']))
+                    box.setEnabled(False)
+                self.layout.addWidget(lbl)
+                self.layout.addWidget(box)
 
     def changed(self,box):
-        if self.transx.text() and self.transy.text() and self.transz.text():
+        if self.transx.text() and self.transy.text() and self.transz.text() and self.rotx.text() and self.roty.text() and self.rotz.text() and self.sclx.text() and self.scly.text() and self.sclz.text():
             self.current.posx = float(self.transx.text())
             self.current.posy = float(self.transy.text())
             self.current.posz = float(self.transz.text())
             self.current.rotx = float(self.rotx.text())
             self.current.roty = float(self.roty.text())
             self.current.rotz = float(self.rotz.text())
+            self.current.sclx = float(self.sclx.text())
+            self.current.scly = float(self.scly.text())
+            self.current.sclz = float(self.sclz.text())
             self.current.saveValues()
             window.glWidget.updateGL()
 
     def changed2(self,box):
         if box.text():
             box.node.changeValue(box.text())
+
+    #def configNameChanged(self,box):
+    #    if box.text():
+    #        box.node.changeValue(box.text())
+    #        self.config_lbl.setText(box.text())
+    #        self.current.updateModel()
+
+    def modelNameChanged(self,box):
+        if box.text():
+            box.node.changeValue(box.text())
+            self.current.updateModel()
 
 class LevelObject:
     def __init__(self,obj,dlist):
@@ -188,23 +232,27 @@ class LevelObject:
         self.roty = rot['Y']
         self.rotz = rot['Z']
 
+        scale = obj['Scale']
+        self.sclx = scale['X']
+        self.scly = scale['Y']
+        self.sclz = scale['Z']
+
     def saveValues(self):
         obj = self.data
         trans = obj['Translate']
-        if self.posx != trans['X']/100:
-            trans.getSubNode('X').changeValue(self.posx*100)
-        if self.posy != trans['Y']/100:
-            trans.getSubNode('Y').changeValue(self.posy*100)
-        if self.posz != trans['Z']/100:
-            trans.getSubNode('Z').changeValue(self.posz*100)
+        if self.posx != trans['X']/100: trans.getSubNode('X').changeValue(self.posx*100)
+        if self.posy != trans['Y']/100: trans.getSubNode('Y').changeValue(self.posy*100)
+        if self.posz != trans['Z']/100: trans.getSubNode('Z').changeValue(self.posz*100)
             
         rot = obj['Rotate']
-        if self.rotx != rot['X']:
-            rot.getSubNode('X').changeValue(self.rotx)
-        if self.roty != rot['Y']:
-            rot.getSubNode('Y').changeValue(self.roty)
-        if self.rotz != rot['Z']:
-            rot.getSubNode('Z').changeValue(self.rotz)
+        if self.rotx != rot['X']: rot.getSubNode('X').changeValue(self.rotx)
+        if self.roty != rot['Y']: rot.getSubNode('Y').changeValue(self.roty)
+        if self.rotz != rot['Z']: rot.getSubNode('Z').changeValue(self.rotz)
+
+        scale = obj['Scale']
+        if self.sclx != scale['X']: scale.getSubNode('X').changeValue(self.sclx)
+        if self.scly != scale['Y']: scale.getSubNode('Y').changeValue(self.scly)
+        if self.sclz != scale['Z']: scale.getSubNode('Z').changeValue(self.sclz)
 
     def draw(self,pick):
         if pick:
@@ -214,8 +262,18 @@ class LevelObject:
         glRotatef(self.rotx,1.0,0.0,0.0)
         glRotatef(self.roty,0.0,1.0,0.0)
         glRotatef(self.rotz,0.0,0.0,1.0)
+        #glScalef(self.sclx,self.scly,self.sclz)
         glCallList(self.list)
         glPopMatrix()
+
+    def updateModel(self):
+        model = self.data['ModelName']
+        if not self.data['ModelName']:
+            model = self.data['UnitConfigName']
+        if not model in window.glWidget.cache:
+            window.glWidget.cache[model] = window.glWidget.loadModel(model)
+        self.list = window.glWidget.cache[model]
+        window.glWidget.updateGL()
 
 class LevelWidget(QGLWidget):
 
