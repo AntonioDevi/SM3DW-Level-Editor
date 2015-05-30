@@ -40,24 +40,7 @@ now = datetime.datetime.now
 
 color = 1
 
-def isfloat(text):
-    try:
-        float(text)
-        return not ' ' in text
-    except ValueError:
-        return 0
-
-def isint(text):
-    try:
-        int(text)
-        return not ' ' in text
-    except ValueError:
-        return 0
-
-def isstr(text):
-    return True
-
-class YCheckBox(QtGui.QCheckBox):
+class CheckBox(QtGui.QCheckBox):
     def __init__(self,node):
         QtGui.QCheckBox.__init__(self)
         self.stateChanged.connect(self.changed)
@@ -66,27 +49,25 @@ class YCheckBox(QtGui.QCheckBox):
     def changed(self,state):
         self.node.changeValue(state==QtCore.Qt.Checked)
 
-class YLineEdit(QtGui.QLineEdit):
-    def __init__(self,val,callback,func):
-        QtGui.QLineEdit.__init__(self,str(val))
+class LineEdit(QtGui.QLineEdit):
+    def __init__(self,value,callback):
+        QtGui.QLineEdit.__init__(self,str(value))
         self.callback = callback
         self.textChanged[str].connect(self.changed)
-        self.prev = str(val)
-        self.test = func
 
     def changed(self,text):
-        if self.test(text) or not text:
-            self.prev = text
-            if text:
-                self.callback(self)
-        else:
-            self.setText(self.prev)
+        if text:
+            self.callback(self)
 
-def YFloatEdit(v,cb):
-    return YLineEdit(v,cb,isfloat)
+def FloatEdit(v,cb):
+    edit = LineEdit(v,cb)
+    edit.setValidator(QtGui.QDoubleValidator())
+    return edit
 
-def YIntEdit(v,cb):
-    return YLineEdit(v,cb,isint)
+def IntEdit(v,cb):
+    edit = LineEdit(v,cb)
+    edit.setValidator(QtGui.QIntValidator())
+    return edit
 
 class SettingsWidget(QtGui.QWidget):
     def __init__(self,parent):
@@ -114,9 +95,9 @@ class SettingsWidget(QtGui.QWidget):
         lbl = QtGui.QLabel('Translate:')
         lbl.setStyleSheet('font-size: 14px')
         self.layout.addWidget(lbl)
-        self.transx = YFloatEdit(obj.posx,self.changed)
-        self.transy = YFloatEdit(obj.posy,self.changed)
-        self.transz = YFloatEdit(obj.posz,self.changed)
+        self.transx = FloatEdit(obj.posx,self.changed)
+        self.transy = FloatEdit(obj.posy,self.changed)
+        self.transz = FloatEdit(obj.posz,self.changed)
         self.layout.addWidget(self.transx)
         self.layout.addWidget(self.transy)
         self.layout.addWidget(self.transz)
@@ -124,9 +105,9 @@ class SettingsWidget(QtGui.QWidget):
         lbl = QtGui.QLabel('Rotate:')
         lbl.setStyleSheet('font-size: 14px')
         self.layout.addWidget(lbl)
-        self.rotx = YFloatEdit(obj.rotx,self.changed)
-        self.roty = YFloatEdit(obj.roty,self.changed)
-        self.rotz = YFloatEdit(obj.rotz,self.changed)
+        self.rotx = FloatEdit(obj.rotx,self.changed)
+        self.roty = FloatEdit(obj.roty,self.changed)
+        self.rotz = FloatEdit(obj.rotz,self.changed)
         self.layout.addWidget(self.rotx)
         self.layout.addWidget(self.roty)
         self.layout.addWidget(self.rotz)
@@ -134,9 +115,9 @@ class SettingsWidget(QtGui.QWidget):
         lbl = QtGui.QLabel('Scale:')
         lbl.setStyleSheet('font-size: 14px')
         self.layout.addWidget(lbl)
-        self.sclx = YFloatEdit(obj.sclx,self.changed)
-        self.scly = YFloatEdit(obj.scly,self.changed)
-        self.sclz = YFloatEdit(obj.sclz,self.changed)
+        self.sclx = FloatEdit(obj.sclx,self.changed)
+        self.scly = FloatEdit(obj.scly,self.changed)
+        self.sclz = FloatEdit(obj.sclz,self.changed)
         self.layout.addWidget(self.sclx)
         self.layout.addWidget(self.scly)
         self.layout.addWidget(self.sclz)
@@ -147,17 +128,17 @@ class SettingsWidget(QtGui.QWidget):
                            'IsLinkDest','ModelSuffix','ModelName']:
                 lbl = QtGui.QLabel(key+':')
                 if isinstance(vnode,byml.FloatNode):
-                    box = YFloatEdit(obj.data[key],self.changed2)
+                    box = FloatEdit(obj.data[key],self.changed2)
                     box.node = vnode
                 elif isinstance(vnode,byml.IntegerNode):
-                    box = YIntEdit(obj.data[key],self.changed2)
+                    box = IntEdit(obj.data[key],self.changed2)
                     box.node = vnode
                 elif isinstance(vnode,byml.BooleanNode):
-                    box = YCheckBox(vnode)
+                    box = CheckBox(vnode)
                     if obj.data[key]:
                         box.toggle()
                 elif isinstance(vnode,byml.StringNode):
-                    box = YLineEdit(str(obj.data[key]),self.changed2,isstr)
+                    box = LineEdit(str(obj.data[key]),self.changed2)
                     box.node = vnode
                 else:
                     box = QtGui.QLineEdit(str(obj.data[key]))
@@ -167,7 +148,7 @@ class SettingsWidget(QtGui.QWidget):
                 
             elif key == 'UnitConfigName':
                 lbl = QtGui.QLabel(key+':')
-                #box = YLineEdit(str(obj.data['UnitConfigName']),self.configNameChanged,isstr)
+                #box = LineEdit(str(obj.data['UnitConfigName']),self.configNameChanged)
                 #box.node = vnode
                 box = QtGui.QLineEdit(str(obj.data[key]))
                 box.setEnabled(False)
@@ -177,7 +158,7 @@ class SettingsWidget(QtGui.QWidget):
             elif key == 'ModelName':
                 lbl = QtGui.QLabel(key+':')
                 if isinstance(vnode,byml.StringNode):
-                    box = YLineEdit(str(obj.data['ModelName']),self.modelNameChanged,isstr)
+                    box = LineEdit(str(obj.data['ModelName']),self.modelNameChanged)
                     box.node = vnode
                 else:
                     box = QtGui.QLineEdit(str(obj.data['ModelName']))
