@@ -450,6 +450,9 @@ class ChooseLevelDialog(QtGui.QDialog):
         self.buttonBox = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok|QtGui.QDialogButtonBox.Cancel)
         self.buttonBox.button(QtGui.QDialogButtonBox.Ok).setEnabled(False)
 
+        btn = self.buttonBox.addButton("Other file...",QtGui.QDialogButtonBox.ActionRole)
+        btn.clicked.connect(self.openFile)
+
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
 
@@ -460,6 +463,12 @@ class ChooseLevelDialog(QtGui.QDialog):
 
         self.setMinimumWidth(340)
         self.setMinimumHeight(384)
+
+    def openFile(self):
+        fn = QtGui.QFileDialog.getOpenFileName(self,'Open Level','StageData','Level Archives (*.szs)')
+        self.currentLevel = os.path.basename(str(fn))[:-8]
+        if self.currentLevel:
+            self.accept()
 
     def handleItemChange(self,current,previous):
         self.currentLevel = current.data(0,QtCore.Qt.UserRole).toString()
