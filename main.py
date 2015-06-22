@@ -280,8 +280,9 @@ class LevelWidget(QGLWidget):
 
     def pickObjects(self,x,y):
         self.paintGL(1)
-        pixel = glReadPixels(x,self.height()-y,1,1,GL_RGB,GL_UNSIGNED_BYTE)
-        r,g,b = [round(ord(pixel[i])/255.0,1) for i in range(3)]
+        array = (GLuint * 1)(0)
+        pixel = glReadPixels(x,self.height()-y,1,1,GL_RGB,GL_UNSIGNED_BYTE,array)
+        r,g,b = [round(((array[0]>>(i*8))&0xFF)/255.0,1) for i in range(3)]
         self.picked = None
         window.settings.reset()
         for obj in self.objects:
