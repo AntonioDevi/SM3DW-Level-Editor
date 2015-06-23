@@ -646,6 +646,10 @@ class MainWindow(QtGui.QMainWindow):
     def keyPressEvent(self,event):
         self.keyPresses[event.key()] = 1
 
+    def wheelEvent(self,event):
+        self.glWidget.posz += event.delta()/15
+        self.glWidget.updateGL()
+
 def main():
     global window
     app = QtGui.QApplication(sys.argv)
