@@ -69,6 +69,11 @@ def IntEdit(v,cb):
     edit.setValidator(QtGui.QIntValidator())
     return edit
 
+def SettingName(oldName):
+    if oldName == 'IsSnowCover':
+        return 'Snow Covered'
+    return oldName
+
 class SettingsWidget(QtGui.QWidget):
     def __init__(self,parent):
         QtGui.QWidget.__init__(self,parent)
@@ -126,7 +131,7 @@ class SettingsWidget(QtGui.QWidget):
             vnode = obj.data.getSubNode(key)
             if not key in ['Scale','Translate','Rotate','UnitConfig','Links','UnitConfigName',
                            'IsLinkDest','ModelSuffix','ModelName']:
-                lbl = QtGui.QLabel(key+':')
+                lbl = QtGui.QLabel(SettingName(key)+':')
                 if isinstance(vnode,byml.FloatNode):
                     box = FloatEdit(obj.data[key],self.changed2)
                     box.node = vnode
@@ -484,6 +489,9 @@ class ChooseLevelDialog(QtGui.QDialog):
             self.accept()
 
 class MainWindow(QtGui.QMainWindow):
+
+    keyPresses = {0x1000020: 0}
+    
     def __init__(self):
         QtGui.QMainWindow.__init__(self)
         self.setWindowTitle("Super Mario 3D World")
@@ -502,6 +510,10 @@ class MainWindow(QtGui.QMainWindow):
         self.settings = SettingsWidget(self)
         self.setupGLScene()
         self.resizeWidgets()
+
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.updateCamera)
+        self.timer.start(30)
 
         self.show()
 
@@ -606,21 +618,33 @@ class MainWindow(QtGui.QMainWindow):
     def resizeEvent(self,event):
         self.resizeWidgets()
 
+    def updateCamera(self):
+        spd = self.keyPresses[0x1000020]*2+1
+        updateScene = False
+        for key in self.keyPresses:
+            if self.keyPresses[key]:
+                if key == ord('I'): self.glWidget.rotx+=spd
+                elif key == ord('K'): self.glWidget.rotx-=spd
+                elif key == ord('O'): self.glWidget.roty+=spd
+                elif key == ord('L'): self.glWidget.roty-=spd
+                elif key == ord('P'): self.glWidget.rotz+=spd
+                elif key == ord(';'): self.glWidget.rotz-=spd
+                elif key == ord('A'): self.glWidget.posx-=spd
+                elif key == ord('D'): self.glWidget.posx+=spd
+                elif key == ord('S'): self.glWidget.posy-=spd
+                elif key == ord('W'): self.glWidget.posy+=spd
+                elif key == ord('Q'): self.glWidget.posz-=spd
+                elif key == ord('E'): self.glWidget.posz+=spd
+                updateScene = True
+
+        if updateScene:
+            self.glWidget.updateGL()
+
+    def keyReleaseEvent(self,event):
+        self.keyPresses[event.key()] = 0
+
     def keyPressEvent(self,event):
-        key = event.key()
-        if key == ord('I'): self.glWidget.rotx+=1
-        elif key == ord('K'): self.glWidget.rotx-=1
-        elif key == ord('O'): self.glWidget.roty+=1
-        elif key == ord('L'): self.glWidget.roty-=1
-        elif key == ord('P'): self.glWidget.rotz+=1
-        elif key == ord(';'): self.glWidget.rotz-=1
-        elif key == ord('A'): self.glWidget.posx-=1
-        elif key == ord('D'): self.glWidget.posx+=1
-        elif key == ord('S'): self.glWidget.posy-=1
-        elif key == ord('W'): self.glWidget.posy+=1
-        elif key == ord('Q'): self.glWidget.posz-=1
-        elif key == ord('E'): self.glWidget.posz+=1
-        self.glWidget.updateGL()
+        self.keyPresses[event.key()] = 1
 
 def main():
     global window
