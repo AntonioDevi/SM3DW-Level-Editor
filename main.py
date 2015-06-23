@@ -429,6 +429,25 @@ class LevelWidget(QGLWidget):
         glVertex3f( 0.5, 0.5, 0.5)
         glVertex3f( 0.5,-0.5, 0.5)
         glVertex3f( 0.5,-0.5,-0.5)
+    
+    mousex = mousey = 0
+    def mousePressEvent(self,event):
+        self.mousex = event.x()
+        self.mousey = event.y()
+
+    def mouseMoveEvent(self,event):
+        deltax = (event.x()-self.mousex)/2
+        deltay = (event.y()-self.mousey)/2
+        buttons = event.buttons()
+        if buttons & QtCore.Qt.LeftButton:
+            self.posx += deltax
+            self.posy -= deltay
+        if buttons & QtCore.Qt.RightButton:
+            self.roty += deltax
+            self.rotx += deltay
+        self.mousex = event.x()
+        self.mousey = event.y()
+        self.updateGL()
 
 class ChooseLevelDialog(QtGui.QDialog):
     def __init__(self,worldList):
