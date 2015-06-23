@@ -2,6 +2,11 @@
 This is a nice little level editor I made. At the moment, it can only move and rotate objects and change their settings. Adding/deleting objects may be added in the future. It can only save edited levels as byml files, you'll have to repack and compress them yourself. Since I can't test edits on a Wii U, some things might be broken.
 
 Controls are:<br>
+Left mouse button + drag to move camera<br>
+Right mouse button + drag to rotate camera<br>
+Scroll wheel to zoom
+
+Alternatively use these keys (holding shift makes them faster):<br>
 I,K: Rotate X<br>
 O,L: Rotate Y<br>
 P,;: Rotate Z<br>
