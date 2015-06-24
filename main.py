@@ -279,10 +279,6 @@ class LevelWidget(QGLWidget):
         self.posx = self.posy =  0
         self.posz = -300
 
-    def mousePressEvent(self,event):
-        if event.button() == 1:
-            self.pickObjects(event.x(),event.y())
-
     def pickObjects(self,x,y):
         self.paintGL(1)
         array = (GLuint * 1)(0)
@@ -432,6 +428,9 @@ class LevelWidget(QGLWidget):
     
     mousex = mousey = 0
     def mousePressEvent(self,event):
+        if event.button() == 1:
+            self.pickObjects(event.x(),event.y())
+
         self.mousex = event.x()
         self.mousey = event.y()
 
