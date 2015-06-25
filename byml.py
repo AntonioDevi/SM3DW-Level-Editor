@@ -56,7 +56,7 @@ class ValueNode:
 
 class StringNode(ValueNode):
     def changeValue(self,val):
-        self.val = val
+        self.val = str(val)
         self.byml.stringChanged(self)
 
 class BooleanNode(ValueNode):
@@ -239,13 +239,20 @@ class BYML:
     def saveChanges(self):
         for node in self.stringUpdates:
             if node.val not in self.strings:
+                print type(node.val)
                 self.strings.append(node.val)
                 self.offs3 += 4
+                print len(self.data)
                 self.data = self.data[:self.stringEnd]+struct.pack('>I',len(self.data))+self.data[self.stringEnd:]
+                print len(self.data)
                 self.data += node.val+'\x00'
+                print len(self.data)
             self.data = self.data[:node.offs]+struct.pack('>I',self.strings.index(node.val))+self.data[node.offs+4:]
+            print len(self.data)
 
         self.data = self.data[:12]+struct.pack('>I',self.offs3)+self.data[16:]
+        print len(self.data)
         self.data = self.data[:self.offs2+1]+struct.pack('>I',len(self.strings))[1:]+self.data[self.offs2+4:]
+        print len(self.data)
 
         self.stringUpdates = []
