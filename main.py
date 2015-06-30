@@ -145,6 +145,7 @@ class SettingsWidget(QtGui.QWidget):
                 elif isinstance(vnode,byml.StringNode):
                     box = LineEdit(str(obj.data[key]),self.changed2)
                     box.node = vnode
+                    box.setEnabled(False)
                 else:
                     box = QtGui.QLineEdit(str(obj.data[key]))
                     box.setEnabled(False)
