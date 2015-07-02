@@ -577,7 +577,7 @@ class MainWindow(QtGui.QMainWindow):
         stime = now()
         self.glWidget.reset()
         self.settings.reset()
-        amount = len(levelData['ObjectList'])
+        amount = len(levelData['Objs'])
         progress = QtGui.QProgressDialog(self)
         progress.setCancelButton(None)
         progress.setMinimumDuration(0)
@@ -585,7 +585,7 @@ class MainWindow(QtGui.QMainWindow):
         progress.setWindowModality(QtCore.Qt.WindowModal)
         progress.setWindowTitle('Loading...')
         i = 0
-        for obj in levelData['ObjectList'].subNodes():
+        for obj in levelData['Objs'].subNodes():
             progress.setLabelText('Loading object '+str(i+1)+'/'+str(amount))
             progress.setValue(i)
             self.loadObject(obj)
