@@ -127,7 +127,7 @@ class SettingsWidget(QtGui.QWidget):
         self.layout.addWidget(self.scly)
         self.layout.addWidget(self.sclz)
 
-        for key in obj.data.subNodes():
+        for key in obj.data:
             vnode = obj.data.getSubNode(key)
             if not key in ['Scale','Translate','Rotate','UnitConfig','Links','UnitConfigName',
                            'IsLinkDest','ModelSuffix','ModelName']:
@@ -461,10 +461,10 @@ class ChooseLevelDialog(QtGui.QDialog):
         tree.itemActivated.connect(self.handleItemActivated)
         
         nodes = []
-        for world in worldList['WorldList'].subNodes():
+        for world in worldList['WorldList']:
             worldNode = QtGui.QTreeWidgetItem()
             worldNode.setText(0,'World '+str(world['WorldId']))
-            for level in world['StageList'].subNodes():
+            for level in world['StageList']:
                 levelNode = QtGui.QTreeWidgetItem()
                 levelNode.setData(0,QtCore.Qt.UserRole,level['StageName'])
                 levelNode.setText(0,'Level '+str(level['CourseId'])+' ('+level['StageName']+')')
@@ -585,7 +585,7 @@ class MainWindow(QtGui.QMainWindow):
         progress.setWindowModality(QtCore.Qt.WindowModal)
         progress.setWindowTitle('Loading...')
         i = 0
-        for obj in levelData['Objs'].subNodes():
+        for obj in levelData['Objs']:
             progress.setLabelText('Loading object '+str(i+1)+'/'+str(amount))
             progress.setValue(i)
             self.loadObject(obj)

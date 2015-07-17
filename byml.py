@@ -85,6 +85,9 @@ class DictNode:
         self.dict = {}
         self.byml = byml
 
+    def __iter__(self):
+        return iter(self.subNodes())
+
     def parse(self):
         if self.parsed:
             return
@@ -157,6 +160,9 @@ class ArrayNode:
 
     def __len__(self):
         return len(self.array)
+
+    def __iter__(self):
+        return iter(self.subNodes())
 
     def parse(self):
         if self.parsed:
